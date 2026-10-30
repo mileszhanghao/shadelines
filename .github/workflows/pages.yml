@@ -38,6 +38,7 @@ jobs:
         run: |
           python -m shadelines.build
           python -m shadelines.figures
+          python -m shadelines.arcgis_package
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
