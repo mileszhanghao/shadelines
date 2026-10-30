@@ -105,55 +105,94 @@ def _arcgis_layer(service: str, layer: int, name: str) -> Fetched:
     return _save(f"{name}.geojson", base, json.dumps(fc).encode())
 
 
+def _first_layer(service: str) -> int:
+    info = _get(f"{SEATTLE_GIS}/{service}/FeatureServer", f="json").json()
+    return info["layers"][0]["id"]
+
+
 def canopy() -> list[Fetched]:
-    """City of Seattle 2016/2021 tree canopy assessment (LiDAR land cover) by census tract."""
+    """City of Seattle 2016/2021 tree canopy assessment (LiDAR land cover), by block group and by tract."""
     listing = _get(SEATTLE_GIS, f="json").json()
     names = sorted(s["name"] for s in listing.get("services", []) if "canopy" in s["name"].lower())
     (RAW / "canopy.services.json").write_text(json.dumps(names, indent=1))
-    return [_arcgis_layer("Seattle_Tree_Canopy_2016_2021_RSE_Census_Tracts", 37, "canopy_tracts")]
+    bg = "Tree_Canopy_Block_Groups_2016_2021"
+    return [
+        _arcgis_layer(bg, _first_layer(bg), "canopy_block_groups"),
+        _arcgis_layer("Seattle_Tree_Canopy_2016_2021_RSE_Census_Tracts", 37, "canopy_tracts"),
+    ]
 
 
-def _census(url: str, name: str, **params) -> Fetched:
-    r = _get(url, **params)
-    return _save(name, r.url, r.content)
+# ACS columns we keep, from the Census Bureau's table-based summary files.
+ACS_COLUMNS = {
+    "B01003_E001": "population",
+    "B03002_E001": "race_total",
+    "B03002_E003": "white_alone_not_hispanic",
+    "B19013_E001": "median_household_income",
+    "B25003_E001": "occupied_units",
+    "B25003_E002": "owner_occupied_units",
+}
+
+
+def _stream_filtered(url: str, keep: Callable[[str], bool]) -> tuple[list[str], list[list[str]]]:
+    """Download a large pipe-delimited file line by line, keeping the header and matching rows."""
+    with SESSION.get(url, stream=True, timeout=600) as r:
+        r.raise_for_status()
+        lines = r.iter_lines(decode_unicode=True)
+        header = next(lines).split("|")
+        rows = [line.split("|") for line in lines if line and keep(line)]
+    return header, rows
 
 
 def acs() -> list[Fetched]:
-    """ACS 5-year estimates by block group: population, race and ethnicity, income."""
-    variables = {
-        "B01003_001E": "population",
-        "B03002_001E": "race_total",
-        "B03002_003E": "white_alone_not_hispanic",
-        "B19013_001E": "median_household_income",
-        "B25003_001E": "occupied_units",
-        "B25003_002E": "owner_occupied_units",
-    }
-    (RAW / "acs.variables.json").write_text(json.dumps(variables, indent=1))
-    return [
-        _census(
-            f"https://api.census.gov/data/{ACS_YEAR}/acs/acs5",
-            "acs_block_groups.json",
-            get="NAME," + ",".join(variables),
-            **{"for": "block group:*", "in": f"state:{STATE} county:{COUNTY} tract:*"},
-        )
-    ]
+    """ACS 5-year estimates for King County block groups.
+
+    Read from the bulk summary files rather than the Census API, which needs a key
+    from shared CI machines. Each file covers one table for every US geography; only
+    King County block groups (GEO_ID 1500000US53033...) are kept.
+    """
+    prefix = f"1500000US{STATE}{COUNTY}"
+    base = f"https://www2.census.gov/programs-surveys/acs/summary_file/{ACS_YEAR}/table-based-SF/data/5YRData"
+    table: dict[str, dict[str, str]] = {}
+    urls = []
+    for t in sorted({c.split("_")[0] for c in ACS_COLUMNS}):
+        url = f"{base}/acsdt5y{ACS_YEAR}-{t.lower()}.dat"
+        urls.append(url)
+        header, rows = _stream_filtered(url, lambda line: line.startswith(prefix))
+        idx = {c: header.index(c) for c in ACS_COLUMNS if c.startswith(t)}
+        for row in rows:
+            rec = table.setdefault(row[0], {"GEO_ID": row[0]})
+            rec.update({ACS_COLUMNS[c]: row[i] for c, i in idx.items()})
+    if not table:
+        raise RuntimeError("no King County block groups found in the ACS summary files")
+    cols = ["GEO_ID", *ACS_COLUMNS.values()]
+    text = "\n".join([",".join(cols)] + [",".join(r.get(c, "") for c in cols) for r in table.values()]) + "\n"
+    (RAW / "acs.columns.json").write_text(json.dumps(ACS_COLUMNS, indent=1))
+    return [_save("acs_block_groups.csv", " ".join(urls), text.encode())]
 
 
 def blocks() -> list[Fetched]:
-    """2020 Census block populations, used to place people within block groups (dasymetric weights)."""
-    out = [
-        _census(
-            "https://api.census.gov/data/2020/dec/pl",
-            "blocks_population.json",
-            get="P1_001N",
-            **{"for": "block:*", "in": f"state:{STATE} county:{COUNTY} tract:*"},
-        )
-    ]
-    listing = _get(SEATTLE_GIS, f="json").json()
-    names = [s["name"] for s in listing.get("services", []) if s["name"].startswith("2020_Census_Blocks")]
-    if names:
-        out.append(_arcgis_layer(names[0], 0, "blocks_2020"))
-    return out
+    """2020 Census blocks in King County with their 2020 population (TIGER/Line POP20 field).
+
+    Used to place people within block groups (dasymetric weights). The statewide file
+    is ~100 MB; only King County is kept.
+    """
+    import tempfile
+
+    import geopandas as gpd
+
+    url = f"https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/tl_2020_{STATE}_tabblock20.zip"
+    with tempfile.TemporaryDirectory() as tmp:
+        zpath = Path(tmp) / "blocks.zip"
+        with SESSION.get(url, stream=True, timeout=600) as r:
+            r.raise_for_status()
+            with zpath.open("wb") as f:
+                for chunk in r.iter_content(1 << 20):
+                    f.write(chunk)
+        gdf = gpd.read_file(zpath, where=f"COUNTYFP20 = '{COUNTY}'", columns=["GEOID20", "POP20"])
+    path = RAW / "blocks_2020.gpkg"
+    path.unlink(missing_ok=True)
+    gdf.to_file(path, driver="GPKG")
+    return [Fetched("blocks_2020.gpkg", url, path)]
 
 
 def tiger() -> list[Fetched]:

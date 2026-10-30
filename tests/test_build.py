@@ -6,7 +6,6 @@ the west tract has 40% canopy, the east 10%. One block group per square, each wi
 one populated block; incomes fall from A to D.
 """
 
-import json
 import zipfile
 
 import geopandas as gpd
@@ -57,41 +56,24 @@ def raw(tmp_path):
         geometry=[box(X0, Y0, X0 + 2000, Y0 + 1000), box(X0 + 2000, Y0, X0 + 4000, Y0 + 1000)],
         crs=CRS,
     ).to_crs(4326)
-    (r / "canopy_tracts.geojson").write_text(tracts.to_json())
+    (r / "canopy_tracts.geojson").write_text(tracts.to_json())  # no block-group layer: falls back to tracts
 
-    names = {
-        "B01003_001E": "population",
-        "B03002_001E": "race_total",
-        "B03002_003E": "white_alone_not_hispanic",
-        "B19013_001E": "median_household_income",
-        "B25003_001E": "occupied_units",
-        "B25003_002E": "owner_occupied_units",
-    }
-    (r / "acs.variables.json").write_text(json.dumps(names))
-    header = ["NAME", *names, "state", "county", "tract", "block group"]
-    acs = [header]
+    # ACS as extracted from the summary files: GEO_ID plus named columns.
+    lines = [
+        "GEO_ID,population,race_total,white_alone_not_hispanic,median_household_income,occupied_units,owner_occupied_units"
+    ]
     for i, (white, income, owners) in enumerate(
         [(900, 150000, 80), (700, 110000, 60), (500, 70000, 40), (200, 40000, 20)]
     ):
         tract = "000100" if i < 2 else "000200"
-        acs.append(
-            ["x", "1000", "1000", str(white), str(income), "400", str(owners * 4), "53", "033", tract, str(i + 1)]
-        )
-    acs.append(["x", "0", "0", "0", "-666666666", "0", "0", "53", "033", "000200", "9"])  # empty block group
-    (r / "acs_block_groups.json").write_text(json.dumps(acs))
+        lines.append(f"1500000US53033{tract}{i + 1},1000,1000,{white},{income},400,{owners * 4}")
+    lines.append("1500000US530330002009,0,0,0,-666666666,0,0")  # empty block group, income suppressed
+    (r / "acs_block_groups.csv").write_text("\n".join(lines) + "\n")
 
-    blocks = [["P1_001N", "state", "county", "tract", "block"]]
-    geoms, ids = [], []
-    for i in range(4):
-        tract = "000100" if i < 2 else "000200"
-        block = f"{i + 1}001"
-        blocks.append(["950", "53", "033", tract, block])
-        ids.append(f"53033{tract}{block}")
-        geoms.append(sq(i))
-    (r / "blocks_population.json").write_text(json.dumps(blocks))
-    gpd.GeoDataFrame({"GEOID20": ids}, geometry=geoms, crs=CRS).to_crs(4326).to_file(
-        r / "blocks_2020.geojson", driver="GeoJSON"
-    )
+    ids = [f"53033{'000100' if i < 2 else '000200'}{i + 1}001" for i in range(4)]
+    gpd.GeoDataFrame({"GEOID20": ids, "POP20": [950] * 4}, geometry=[sq(i) for i in range(4)], crs=CRS).to_crs(
+        4269
+    ).to_file(r / "blocks_2020.gpkg", driver="GPKG")
 
     city = gpd.GeoDataFrame(
         {"NAME": ["Seattle", "Tacoma"]}, geometry=[box(X0, Y0, X0 + 4000, Y0 + 1000), sq(10)], crs=CRS
@@ -126,6 +108,7 @@ def test_build_end_to_end(raw, tmp_path):
     layers = gpd.list_layers(tmp_path / "out" / "shadelines.gpkg")["name"].tolist()
     assert "holc_1936_with_2021_measures" in layers
     assert (tmp_path / "site" / "shadelines.gpkg").exists()
+    assert s["canopy_unit"] == "tract"
 
 
 def test_figures_render(raw, tmp_path):

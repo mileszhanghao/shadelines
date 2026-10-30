@@ -30,7 +30,7 @@ def measures(
     target: gpd.GeoDataFrame, tid: str, canopy: gpd.GeoDataFrame, acs: pd.DataFrame, blocks: gpd.GeoDataFrame
 ) -> pd.DataFrame:
     """Canopy (by area) and ACS figures (through blocks) for each target polygon."""
-    can = areal_weighted(canopy, target, "tract", tid, extensive=["canopy_2016", "canopy_2021", "land"])
+    can = areal_weighted(canopy, target, "unit", tid, extensive=["canopy_2016", "canopy_2021", "land"])
     ppl = dasymetric(acs, blocks, target, "bg", "bg", "pop2020", tid, counts=ACS_COUNTS, weighted_means=ACS_MEANS)
     return can.merge(ppl, on=tid, how="outer")
 
@@ -67,7 +67,7 @@ def summarize(zones: pd.DataFrame, group: str = "grade") -> pd.DataFrame:
 
 def build(raw: Path = load.RAW, out_dir: Path = Path("data/processed"), site_dir: Path = Path("site/data")) -> dict:
     holc = load.holc(raw)
-    canopy = load.canopy_tracts(raw)
+    canopy, canopy_level = load.canopy(raw)
     acs = load.acs_block_groups(raw)
     blocks = load.blocks(raw)
     city = load.city_limits(raw)
@@ -115,6 +115,7 @@ def build(raw: Path = load.RAW, out_dir: Path = Path("data/processed"), site_dir
         "grades": {g: {"name": GRADE_NAMES[g], **row(by_grade.loc[g])} for g in GRADES},
         "city": row(baseline),
         "ungraded_areas": int((~zones["grade"].isin(GRADES)).sum()),
+        "canopy_unit": canopy_level,
         "check": {
             # Our citywide canopy should match the city's own published figure closely.
             "city_canopy_pct_2021_from_tracts": round(float(baseline["canopy_pct_2021"]), 2),

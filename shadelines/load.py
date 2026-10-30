@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import zipfile
 from pathlib import Path
 
@@ -34,16 +33,17 @@ def holc(raw: Path = RAW, city: str = "Seattle", state: str = "WA") -> gpd.GeoDa
     return gdf.to_crs(CRS).reset_index(drop=True)
 
 
-def canopy_tracts(raw: Path = RAW) -> gpd.GeoDataFrame:
-    """City of Seattle canopy assessment by census tract: canopy and land area in 2016 and 2021.
+CANOPY_FIELDS = ["TreeCanopy_2016_Area", "TreeCanopy_2021_Area", "Total_A", "Water_A", "TreeCanopy_2021_Percent"]
 
-    Areas are kept as totals so they can be split between HOLC areas and added up;
-    percentages are recomputed afterwards from the totals.
-    """
-    gdf = gpd.read_file(raw / "canopy_tracts.geojson")
+
+def _canopy(path: Path) -> gpd.GeoDataFrame | None:
+    gdf = gpd.read_file(path)
+    id_col = next((c for c in gdf.columns if c.upper().startswith("GEOID")), None)
+    if id_col is None or not all(f in gdf.columns for f in CANOPY_FIELDS):
+        return None
     out = gpd.GeoDataFrame(
         {
-            "tract": gdf["GEOID10"].astype(str),
+            "unit": gdf[id_col].astype(str),
             "canopy_2016": gdf["TreeCanopy_2016_Area"].astype(float),
             "canopy_2021": gdf["TreeCanopy_2021_Area"].astype(float),
             "land": (gdf["Total_A"].fillna(0) - gdf["Water_A"].fillna(0)).astype(float),
@@ -55,34 +55,35 @@ def canopy_tracts(raw: Path = RAW) -> gpd.GeoDataFrame:
     return out.to_crs(CRS)
 
 
-def _census_json(path: Path) -> pd.DataFrame:
-    rows = json.loads(path.read_text())
-    return pd.DataFrame(rows[1:], columns=rows[0])
+def canopy(raw: Path = RAW) -> tuple[gpd.GeoDataFrame, str]:
+    """City of Seattle canopy assessment: canopy and land area in 2016 and 2021.
+
+    Uses block groups when that layer has the needed fields (finer than tracts, so
+    less smoothing when split between HOLC areas), else census tracts. Areas are
+    kept as totals so they can be split between HOLC areas and added up;
+    percentages are recomputed afterwards from the totals.
+    """
+    for name, level in (("canopy_block_groups.geojson", "block group"), ("canopy_tracts.geojson", "tract")):
+        if (raw / name).exists() and (gdf := _canopy(raw / name)) is not None:
+            return gdf, level
+    raise ValueError("no canopy layer with the expected fields")
 
 
 def acs_block_groups(raw: Path = RAW) -> pd.DataFrame:
     """ACS 5-year estimates per block group, with readable column names."""
-    df = _census_json(raw / "acs_block_groups.json")
-    names = json.loads((raw / "acs.variables.json").read_text())
-    df["bg"] = df["state"] + df["county"] + df["tract"] + df["block group"]
-    df = df.rename(columns=names)
-    for col in names.values():
+    df = pd.read_csv(raw / "acs_block_groups.csv", dtype={"GEO_ID": str})
+    df["bg"] = df["GEO_ID"].str.split("US").str[-1]
+    for col in df.columns.drop(["GEO_ID", "bg"]):
         df[col] = pd.to_numeric(df[col], errors="coerce").replace(CENSUS_MISSING, np.nan)
-    return df[["bg", *names.values()]]
+    return df.drop(columns="GEO_ID")
 
 
 def blocks(raw: Path = RAW) -> gpd.GeoDataFrame:
-    """2020 census blocks in Seattle with their 2020 population and parent block group."""
-    pop = _census_json(raw / "blocks_population.json")
-    pop["geoid"] = pop["state"] + pop["county"] + pop["tract"] + pop["block"]
-    pop["pop2020"] = pd.to_numeric(pop["P1_001N"])
-    gdf = gpd.read_file(raw / "blocks_2020.geojson")
-    id_col = next(c for c in gdf.columns if c.upper() in ("GEOID20", "GEOID", "GEOID_20"))
-    gdf = gdf.rename(columns={id_col: "geoid"})[["geoid", "geometry"]]
-    gdf["geoid"] = gdf["geoid"].astype(str)
-    gdf = gdf.merge(pop[["geoid", "pop2020"]], on="geoid", how="left")
-    gdf["pop2020"] = gdf["pop2020"].fillna(0)
-    gdf["bg"] = gdf["geoid"].str[:12]
+    """2020 census blocks with their 2020 population and parent block group."""
+    gdf = gpd.read_file(raw / "blocks_2020.gpkg")
+    gdf = gdf.rename(columns={"GEOID20": "geoid", "POP20": "pop2020"})[["geoid", "pop2020", "geometry"]]
+    gdf["pop2020"] = pd.to_numeric(gdf["pop2020"]).fillna(0)
+    gdf["bg"] = gdf["geoid"].astype(str).str[:12]
     gdf["geometry"] = gdf.geometry.make_valid()
     return gdf.to_crs(CRS)
 
