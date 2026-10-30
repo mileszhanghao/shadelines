@@ -1,0 +1,37 @@
+name: Fetch raw data
+
+# Downloads every input and stores the snapshot on the `raw-data` branch, so the
+# analysis can be re-run (locally or in CI) from exactly the same bytes.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [shadelines/fetch.py, .github/workflows/fetch.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Download
+        run: python -m shadelines.fetch
+      - name: Store snapshot on raw-data branch
+        run: |
+          set -e
+          cp -r data/raw /tmp/raw
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan raw-data
+          git rm -rfq .
+          cp -r /tmp/raw/. .
+          printf '%s\n' "# Raw data snapshot" "" "Downloaded by the *Fetch raw data* workflow from commit ${GITHUB_SHA}." "See MANIFEST.json for sources, sizes and checksums. Licenses are listed in the main branch README." > README.md
+          git add -A
+          git commit -qm "Raw data snapshot from ${GITHUB_SHA}"
+          git push -f origin raw-data

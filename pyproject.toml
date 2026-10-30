@@ -1,0 +1,28 @@
+[project]
+name = "shadelines"
+version = "0.1.0"
+description = "Seattle's 1936 HOLC (redlining) map compared with the city's 2021 tree canopy and today's census data."
+requires-python = ">=3.11"
+dependencies = [
+  "geopandas>=1.0",
+  "pyogrio>=0.9",
+  "pyarrow>=17",
+  "requests>=2.32",
+  "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.setuptools]
+packages = ["shadelines"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadelines · Seattle's 1936 redlining map and today's tree canopy</title>
+<meta name="description" content="Where Seattle's 1936 HOLC map drew red lines, how much shade is there today? An interactive map comparing the 1936 grades with the city's 2021 tree canopy and today's census data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root {
+    --bg: #f4f1ea; --ink: #23201b; --muted: #6b645a; --card: #fffdf8; --line: #ddd5c6; --accent: #2f6b3a;
+    --A: #76a865; --B: #7cb5bd; --C: #e4cb3f; --D: #d9838d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #171512; --ink: #ece6da; --muted: #a39b8d; --card: #201d19; --line: #36312a; --accent: #8fc79a; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, system-ui, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px 56px; }
+  header { padding: 44px 0 18px; max-width: 760px; }
+  .kicker { color: var(--muted); font-size: 0.95rem; }
+  h1 { font: 600 clamp(2rem, 5.5vw, 3.2rem)/1.06 Fraunces, Georgia, serif; margin: 6px 0 12px; letter-spacing: -0.01em; }
+  h2 { font: 600 1.35rem/1.2 Fraunces, Georgia, serif; margin: 0 0 8px; }
+  .lede { font-size: 1.1rem; margin: 0; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  #map { height: min(76vh, 760px); min-height: 420px; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; background: #e9e4d8; }
+  .modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .modes button { font: inherit; font-size: 0.9rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
+  .modes button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; color: var(--muted); margin: 10px 0 0; min-height: 1.4em; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.15); }
+  .note { color: var(--muted); font-size: 0.88rem; }
+  .finding { font-size: 1.02rem; }
+  .finding b { color: var(--accent); }
+  .tablewrap { overflow-x: auto; }
+  @media (max-width: 480px) { table { font-size: 0.8rem; } th, td { padding: 4px 3px; } }
+  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin-top: 8px; }
+  th, td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: var(--muted); font-weight: 500; line-height: 1.25; }
+  td { white-space: nowrap; }
+  .chip { display: inline-block; width: 1.4em; text-align: center; border-radius: 4px; font-weight: 600; color: #1b1b1b; }
+  .maplibregl-popup-content { background: var(--card); color: var(--ink); border-radius: 10px; font: 14px/1.45 Inter, system-ui, sans-serif; padding: 12px 14px; }
+  .maplibregl-popup-tip { border-top-color: var(--card) !important; border-bottom-color: var(--card) !important; }
+  .pop h3 { margin: 0 0 4px; font: 600 1rem Fraunces, Georgia, serif; }
+  .pop dl { display: grid; grid-template-columns: auto auto; gap: 1px 12px; margin: 6px 0 0; }
+  .pop dt { color: var(--muted); }
+  .pop dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  section.more { margin-top: 18px; }
+  section.more p { max-width: 760px; }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: 0.84rem; margin-top: 24px; max-width: 860px; }
+  #chart svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">Shadelines · Seattle, 1936 and today</div>
+    <h1>Where the red lines were drawn, is there shade today?</h1>
+    <p class="lede">In 1936 the federal Home Owners' Loan Corporation graded Seattle's neighborhoods from A ("best") to D ("hazardous"), largely by who lived there. This map lays the city's 2021 tree canopy survey and today's census figures over those boundaries.</p>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="modes" role="group" aria-label="Color the map by">
+        <button data-mode="grade" aria-pressed="true">1936 grade</button>
+        <button data-mode="canopy_pct_2021" aria-pressed="false">Tree canopy 2021</button>
+        <button data-mode="canopy_change_pts" aria-pressed="false">Canopy change 2016–21</button>
+        <button data-mode="people_of_color_pct" aria-pressed="false">People of color</button>
+        <button data-mode="median_household_income" aria-pressed="false">Household income</button>
+      </div>
+      <div id="map" role="region" aria-label="Map of Seattle's 1936 HOLC areas"></div>
+      <div class="legend" id="legend"></div>
+      <p class="note">Click an area for its numbers. Areas show today's values inside the 1936 boundaries.</p>
+    </div>
+
+    <aside class="card">
+      <h2>By 1936 grade</h2>
+      <p class="finding" id="finding">Loading…</p>
+      <div id="chart"></div>
+      <div class="tablewrap"><table id="table"></table></div>
+      <p class="note" id="baseline"></p>
+    </aside>
+  </div>
+
+  <section class="more card">
+    <h2>How the numbers are made</h2>
+    <p><b>Tree canopy</b> comes from the City of Seattle's 2016 and 2021 canopy assessment (LiDAR and aerial imagery, by census tract). Tracts don't follow 1936 boundaries, so canopy and land area are split between HOLC areas in proportion to how much of each tract they cover, then added up. Percentages are computed from those totals.</p>
+    <p><b>People</b> come from the Census Bureau's American Community Survey (5-year, block groups). People don't spread evenly over land, so each block group's figures are first placed onto its 2020 census blocks by where people were counted, then onto HOLC areas. Median income can't be added up; an area's figure is the average of its block groups' medians, weighted by the people it received from each, and is an approximation.</p>
+    <p><b>What this shows and doesn't.</b> The 1936 grades and today's numbers line up, but a map can't separate the effect of the grades themselves from everything that happened since: highways, urban renewal, zoning, industry that was already there in 1936. The comparison is a description, not a measure of cause.</p>
+    <p class="note"><a href="https://github.com/mileszhanghao/shadelines">Code, method and data sources on GitHub</a> · <a href="data/shadelines.gpkg">Download the GeoPackage</a> (opens in QGIS or ArcGIS Pro)</p>
+  </section>
+
+  <footer>
+    HOLC areas: Robert K. Nelson, LaDale Winling, et al., "Mapping Inequality," <i>American Panorama</i>, University of Richmond Digital Scholarship Lab (<a href="https://dsl.richmond.edu/panorama/redlining/">source</a>), CC BY-NC-SA 4.0.
+    Tree canopy: City of Seattle Office of Sustainability &amp; Environment, data by University of Vermont Spatial Analysis Laboratory.
+    Population: U.S. Census Bureau, ACS 5-year estimates and 2020 Census. Basemap © <a href="https://openfreemap.org">OpenFreeMap</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
+    Built by <a href="https://github.com/mileszhanghao">Miles Zhang</a>.
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/dist/plot.umd.min.js"></script>
+<script>
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const GRADES = ["A", "B", "C", "D"];
+const GRADE_COLOR = Object.fromEntries(GRADES.map((g) => [g, css(`--${g}`)]));
+const fmt = {
+  pct: (v) => (v == null ? "–" : `${v.toFixed(0)}%`),
+  pts: (v) => (v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`),
+  usd: (v) => (v == null ? "–" : `$${Math.round(v / 1000)}k`),
+  int: (v) => (v == null ? "–" : Math.round(v).toLocaleString()),
+};
+const MODES = {
+  grade: { label: "1936 grade" },
+  canopy_pct_2021: { label: "Tree canopy, 2021", fmt: fmt.pct, scheme: ["#f3eccd", "#c7d9a0", "#8dbb6f", "#4f8f45", "#215f2c"] },
+  canopy_change_pts: { label: "Canopy change 2016–2021", fmt: fmt.pts, diverging: true, scheme: ["#a1532e", "#d9a07a", "#f1ece0", "#8fbf86", "#2f7a3a"] },
+  people_of_color_pct: { label: "People of color", fmt: fmt.pct, scheme: ["#f4ead8", "#e2c4a0", "#c99a72", "#a26a4d", "#6c3e2e"] },
+  median_household_income: { label: "Median household income (approx.)", fmt: fmt.usd, scheme: ["#efe9f4", "#cdbfe0", "#a493c7", "#7766a8", "#4a3a80"] },
+};
+
+// If the basemap can't be reached, draw the data on a plain background rather than not at all.
+const FALLBACK_STYLE = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#e9e4d8" } }] };
+const basemap = fetch("https://tiles.openfreemap.org/styles/positron").then((r) => (r.ok ? r.json() : FALLBACK_STYLE)).catch(() => FALLBACK_STYLE);
+
+Promise.all([...["zones.geojson", "city.geojson", "summary.json"].map((f) => fetch(`data/${f}`).then((r) => r.json())), basemap]).then(([zones, city, s, style]) => {
+  drawSummary(s);
+
+  // Plain min/max of the coordinates. (d3.geoBounds reads standard GeoJSON ring order
+  // as "everything except this polygon" and returns the whole globe.)
+  const coords = zones.features.flatMap((f) => (f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates).flat(2));
+  const bounds = [[d3.min(coords, (c) => c[0]), d3.min(coords, (c) => c[1])], [d3.max(coords, (c) => c[0]), d3.max(coords, (c) => c[1])]];
+  const map = new maplibregl.Map({
+    container: "map",
+    style,
+    bounds: [bounds[0], bounds[1]],
+    fitBoundsOptions: { padding: 24 },
+    attributionControl: { compact: true },
+    cooperativeGestures: matchMedia("(max-width: 900px)").matches,
+  });
+  map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+  // Quantile breaks per measure, so each color holds about the same number of areas.
+  const breaks = {};
+  for (const [k, m] of Object.entries(MODES)) {
+    if (k === "grade") continue;
+    const vals = zones.features.map((f) => f.properties[k]).filter((v) => v != null).sort(d3.ascending);
+    breaks[k] = m.diverging
+      ? [-3, -1, 1, 3]
+      : [0.2, 0.4, 0.6, 0.8].map((q) => d3.quantileSorted(vals, q));
+  }
+
+  function fillFor(mode) {
+    if (mode === "grade") return ["match", ["get", "grade"], ...GRADES.flatMap((g) => [g, GRADE_COLOR[g]]), "#bdb6a8"];
+    const m = MODES[mode], b = breaks[mode];
+    return ["case", ["==", ["get", mode], null], "#cfc8bb", ["step", ["get", mode], m.scheme[0], b[0], m.scheme[1], b[1], m.scheme[2], b[2], m.scheme[3], b[3], m.scheme[4]]];
+  }
+
+  function legend(mode) {
+    const el = document.getElementById("legend");
+    if (mode === "grade") {
+      el.innerHTML = GRADES.map((g) => `<span><i style="background:${GRADE_COLOR[g]}"></i>${g} · ${s.grades[g].name}</span>`).join("") + `<span><i style="background:#bdb6a8"></i>Ungraded</span>`;
+      return;
+    }
+    const m = MODES[mode], b = breaks[mode];
+    const edges = [null, ...b, null];
+    el.innerHTML = `<span>${m.label}:</span>` + m.scheme.map((c, i) => `<span><i style="background:${c}"></i>${edges[i] == null ? "under " + m.fmt(edges[i + 1]) : edges[i + 1] == null ? m.fmt(edges[i]) + "+" : m.fmt(edges[i]) + "–" + m.fmt(edges[i + 1])}</span>`).join("") + `<span><i style="background:#cfc8bb"></i>No data</span>`;
+  }
+
+  map.on("load", () => {
+    map.addSource("zones", { type: "geojson", data: zones });
+    map.addSource("city", { type: "geojson", data: city });
+    map.addLayer({ id: "city-line", type: "line", source: "city", paint: { "line-color": "#7a7265", "line-width": 1, "line-dasharray": [2, 2] } });
+    map.addLayer({ id: "zones-fill", type: "fill", source: "zones", paint: { "fill-color": fillFor("grade"), "fill-opacity": 0.72 } });
+    map.addLayer({ id: "zones-line", type: "line", source: "zones", paint: { "line-color": "#3b352c", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.3, 14, 1.2], "line-opacity": 0.6 } });
+    legend("grade");
+
+    map.on("click", "zones-fill", (e) => {
+      const p = e.features[0].properties;
+      const v = (k) => (p[k] === "null" || p[k] == null ? null : Number(p[k]));
+      new maplibregl.Popup({ maxWidth: "280px" })
+        .setLngLat(e.lngLat)
+        .setHTML(`<div class="pop"><h3>${p.label || "Area " + p.area_id} · <span class="chip" style="background:${GRADE_COLOR[p.grade] || "#bdb6a8"}">${GRADES.includes(p.grade) ? p.grade : "–"}</span></h3>
+          <dl><dt>Tree canopy 2021</dt><dd>${fmt.pct(v("canopy_pct_2021"))}</dd>
+          <dt>Change since 2016</dt><dd>${fmt.pts(v("canopy_change_pts"))} pts</dd>
+          <dt>People of color</dt><dd>${fmt.pct(v("people_of_color_pct"))}</dd>
+          <dt>Household income*</dt><dd>${fmt.usd(v("median_household_income"))}</dd>
+          <dt>Homes owner-occupied</dt><dd>${fmt.pct(v("owner_occupied_pct"))}</dd>
+          <dt>Residents (est.)</dt><dd>${fmt.int(v("population"))}</dd></dl>
+          <div class="note" style="margin-top:6px">*people-weighted average of block-group medians</div></div>`)
+        .addTo(map);
+    });
+    map.on("mouseenter", "zones-fill", () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", "zones-fill", () => (map.getCanvas().style.cursor = ""));
+  });
+
+  document.querySelectorAll(".modes button").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".modes button").forEach((b) => b.setAttribute("aria-pressed", String(b === btn)));
+      const mode = btn.dataset.mode;
+      if (map.getLayer("zones-fill")) map.setPaintProperty("zones-fill", "fill-color", fillFor(mode));
+      legend(mode);
+    }),
+  );
+});
+
+function drawSummary(s) {
+  const g = s.grades, c = s.city;
+  const a = g.A.canopy_pct_2021, d = g.D.canopy_pct_2021;
+  document.getElementById("finding").innerHTML =
+    `Areas graded <b>A</b> in 1936 have <b>${fmt.pct(a)}</b> tree canopy today; areas graded <b>D</b> have <b>${fmt.pct(d)}</b>` +
+    (a > d ? `: A areas have ${(a / d).toFixed(1)} times as much shade.` : ".") +
+    ` The citywide figure is ${fmt.pct(c.canopy_pct_2021)}.`;
+
+  const rows = GRADES.map((k) => ({ grade: k, ...g[k] }));
+  const W = Math.min(340, document.getElementById("chart").clientWidth || 340);
+  document.getElementById("chart").append(Plot.plot({
+    width: W, height: 190, marginLeft: 28, marginRight: 12,
+    x: { domain: GRADES, label: null, tickSize: 0 },
+    y: { label: "Tree canopy 2021 (%)", grid: true, domain: [0, Math.max(...rows.map((r) => r.canopy_pct_2021_q3 ?? r.canopy_pct_2021)) * 1.15] },
+    marks: [
+      Plot.ruleY([c.canopy_pct_2021], { stroke: css("--muted"), strokeDasharray: "4 3" }),
+      Plot.text([c.canopy_pct_2021], { y: (v) => v, x: () => "D", text: () => "city", dx: 30, dy: -6, fill: css("--muted"), fontSize: 10 }),
+      Plot.ruleX(rows, { x: "grade", y1: "canopy_pct_2021_q1", y2: "canopy_pct_2021_q3", stroke: css("--muted"), strokeWidth: 1.5 }),
+      Plot.barY(rows, { x: "grade", y: "canopy_pct_2021", fill: (r) => GRADE_COLOR[r.grade], insetLeft: 10, insetRight: 10 }),
+      Plot.text(rows, { x: "grade", y: "canopy_pct_2021", text: (r) => fmt.pct(r.canopy_pct_2021), dy: -8, fontSize: 11, fill: css("--ink") }),
+    ],
+  }));
+
+  document.getElementById("table").innerHTML =
+    `<tr><th>Grade</th><th>Areas</th><th>Canopy<br>change*</th><th>People<br>of color</th><th>Income†</th><th>Owner<br>occupied</th></tr>` +
+    rows.map((r) => `<tr><td><span class="chip" style="background:${GRADE_COLOR[r.grade]}">${r.grade}</span></td><td>${r.areas}</td><td>${fmt.pts(r.canopy_change_pts)}</td><td>${fmt.pct(r.people_of_color_pct)}</td><td>${fmt.usd(r.median_household_income)}</td><td>${fmt.pct(r.owner_occupied_pct)}</td></tr>`).join("") +
+    `<tr><td>City</td><td></td><td>${fmt.pts(c.canopy_change_pts)}</td><td>${fmt.pct(c.people_of_color_pct)}</td><td>${fmt.usd(c.median_household_income)}</td><td>${fmt.pct(c.owner_occupied_pct)}</td></tr>`;
+  document.getElementById("baseline").textContent =
+    "Bars: canopy across all areas of a grade together (big areas count more). Grey lines: the middle half of individual areas. *Percentage points, 2016 to 2021. †Approximate; see below.";
+}
+</script>
+</body>
+</html>
