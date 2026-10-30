@@ -21,7 +21,12 @@ jobs:
           python-version: "3.12"
       - run: pip install requests
       - name: Download
-        run: python -m shadelines.fetch
+        id: download
+        # Keep going on failure so the log (and whatever did download) is saved for inspection.
+        run: |
+          set -o pipefail
+          python -m shadelines.fetch 2>&1 | tee fetch.log || echo "failed=true" >> "$GITHUB_OUTPUT"
+          mkdir -p data/raw && cp fetch.log data/raw/fetch.log
       - name: Store snapshot on raw-data branch
         run: |
           set -e
@@ -35,3 +40,6 @@ jobs:
           git add -A
           git commit -qm "Raw data snapshot from ${GITHUB_SHA}"
           git push -f origin raw-data
+      - name: Fail if any source failed
+        if: steps.download.outputs.failed == 'true'
+        run: exit 1
