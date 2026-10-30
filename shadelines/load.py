@@ -38,7 +38,8 @@ CANOPY_FIELDS = ["TreeCanopy_2016_Area", "TreeCanopy_2021_Area", "Total_A", "Wat
 
 def _canopy(path: Path) -> gpd.GeoDataFrame | None:
     gdf = gpd.read_file(path)
-    id_col = next((c for c in gdf.columns if c.upper().startswith("GEOID")), None)
+    # Tracts carry GEOID10; the block-group layer calls its 12-digit GEOID just "ID".
+    id_col = next((c for c in gdf.columns if c.upper().startswith("GEOID")), "ID" if "ID" in gdf.columns else None)
     if id_col is None or not all(f in gdf.columns for f in CANOPY_FIELDS):
         return None
     out = gpd.GeoDataFrame(

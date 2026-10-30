@@ -137,6 +137,7 @@ def _stream_filtered(url: str, keep: Callable[[str], bool]) -> tuple[list[str], 
     """Download a large pipe-delimited file line by line, keeping the header and matching rows."""
     with SESSION.get(url, stream=True, timeout=600) as r:
         r.raise_for_status()
+        r.encoding = r.encoding or "utf-8"  # the server sends no charset, so iter_lines would yield bytes
         lines = r.iter_lines(decode_unicode=True)
         header = next(lines).split("|")
         rows = [line.split("|") for line in lines if line and keep(line)]
@@ -188,7 +189,10 @@ def blocks() -> list[Fetched]:
             with zpath.open("wb") as f:
                 for chunk in r.iter_content(1 << 20):
                     f.write(chunk)
-        gdf = gpd.read_file(zpath, where=f"COUNTYFP20 = '{COUNTY}'", columns=["GEOID20", "POP20"])
+        gdf = gpd.read_file(zpath, columns=["GEOID20", "COUNTYFP20", "POP20"])
+    gdf = gdf[gdf["COUNTYFP20"] == COUNTY].drop(columns="COUNTYFP20")
+    if gdf.empty:
+        raise RuntimeError(f"no blocks for county {COUNTY} in {url}")
     path = RAW / "blocks_2020.gpkg"
     path.unlink(missing_ok=True)
     gdf.to_file(path, driver="GPKG")
