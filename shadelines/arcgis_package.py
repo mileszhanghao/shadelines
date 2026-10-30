@@ -72,6 +72,8 @@ def build(raw: Path = load.RAW, out_dir: Path = Path("site/data/arcgis")) -> Pat
     rows = [{"grade": g, **{k: v for k, v in summary["grades"][g].items() if k != "name"}} for g in "ABCD"]
     rows.append({"grade": "City", **summary["city"]})
     pd.DataFrame(rows).to_csv(out_dir / "python_results_by_grade.csv", index=False)
+    script = Path(__file__).resolve().parent.parent / "arcgis" / "shadelines_arcpy.py"
+    (out_dir / script.name).write_text(script.read_text())
     return gpkg
 
 
