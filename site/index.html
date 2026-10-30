@@ -25,13 +25,14 @@
   h1 { font: 600 clamp(2rem, 5.5vw, 3.2rem)/1.06 Fraunces, Georgia, serif; margin: 6px 0 12px; letter-spacing: -0.01em; }
   h2 { font: 600 1.35rem/1.2 Fraunces, Georgia, serif; margin: 0 0 8px; }
   .lede { font-size: 1.1rem; margin: 0; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; align-items: start; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
   #map { height: min(76vh, 760px); min-height: 420px; border-radius: 14px; border: 1px solid var(--line); overflow: hidden; background: #e9e4d8; }
   .modes { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
   .modes button { font: inherit; font-size: 0.9rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 5px 12px; cursor: pointer; }
   .modes button[aria-pressed="true"] { background: var(--ink); color: var(--card); border-color: var(--ink); }
+  .scan { display: block; font-size: 0.9rem; color: var(--muted); margin-top: 8px; }
   .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.85rem; color: var(--muted); margin: 10px 0 0; min-height: 1.4em; }
   .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.15); }
   .note { color: var(--muted); font-size: 0.88rem; }
@@ -39,8 +40,8 @@
   .finding b { color: var(--accent); }
   .tablewrap { overflow-x: auto; }
   @media (max-width: 480px) { table { font-size: 0.8rem; } th, td { padding: 4px 3px; } }
-  table { border-collapse: collapse; width: 100%; font-size: 0.88rem; margin-top: 8px; }
-  th, td { padding: 5px 6px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.8rem; margin-top: 8px; }
+  th, td { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child { text-align: left; }
   th { color: var(--muted); font-weight: 500; line-height: 1.25; }
   td { white-space: nowrap; }
@@ -76,6 +77,7 @@
         <button data-mode="median_household_income" aria-pressed="false">Household income</button>
       </div>
       <div id="map" role="region" aria-label="Map of Seattle's 1936 HOLC areas"></div>
+      <label class="scan"><input type="checkbox" id="scan"> Show the original 1936 map (scanned and georeferenced by Mapping Inequality)</label>
       <div class="legend" id="legend"></div>
       <p class="note">Click an area for its numbers. Areas show today's values inside the 1936 boundaries.</p>
     </div>
@@ -91,7 +93,7 @@
 
   <section class="more card">
     <h2>How the numbers are made</h2>
-    <p><b>Tree canopy</b> comes from the City of Seattle's 2016 and 2021 canopy assessment (LiDAR and aerial imagery, by census tract). Tracts don't follow 1936 boundaries, so canopy and land area are split between HOLC areas in proportion to how much of each tract they cover, then added up. Percentages are computed from those totals.</p>
+    <p><b>Tree canopy</b> comes from the City of Seattle's 2016 and 2021 canopy assessment (LiDAR and aerial imagery, by census block group). Block groups don't follow 1936 boundaries, so canopy and land area are split between HOLC areas in proportion to how much of each block group they cover, then added up. Percentages are computed from those totals. Citywide, this gives 28.2% for 2021; the city's own figure is 28.1%.</p>
     <p><b>People</b> come from the Census Bureau's American Community Survey (5-year, block groups). People don't spread evenly over land, so each block group's figures are first placed onto its 2020 census blocks by where people were counted, then onto HOLC areas. Median income can't be added up; an area's figure is the average of its block groups' medians, weighted by the people it received from each, and is an approximation.</p>
     <p><b>What this shows and doesn't.</b> The 1936 grades and today's numbers line up, but a map can't separate the effect of the grades themselves from everything that happened since: highways, urban renewal, zoning, industry that was already there in 1936. The comparison is a description, not a measure of cause.</p>
     <p class="note"><a href="https://github.com/mileszhanghao/shadelines">Code, method and data sources on GitHub</a> · <a href="data/shadelines.gpkg">Download the GeoPackage</a> (opens in QGIS or ArcGIS Pro)</p>
@@ -114,7 +116,7 @@ const GRADES = ["A", "B", "C", "D"];
 const GRADE_COLOR = Object.fromEntries(GRADES.map((g) => [g, css(`--${g}`)]));
 const fmt = {
   pct: (v) => (v == null ? "–" : `${v.toFixed(0)}%`),
-  pts: (v) => (v == null ? "–" : `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(1)}`),
+  pts: (v) => (v == null ? "–" : `${v >= 0.05 ? "+" : v <= -0.05 ? "−" : ""}${Math.abs(v).toFixed(1)}`),
   usd: (v) => (v == null ? "–" : `$${Math.round(v / 1000)}k`),
   int: (v) => (v == null ? "–" : Math.round(v).toLocaleString()),
 };
@@ -177,6 +179,18 @@ Promise.all([...["zones.geojson", "city.geojson", "summary.json"].map((f) => fet
   map.on("load", () => {
     map.addSource("zones", { type: "geojson", data: zones });
     map.addSource("city", { type: "geojson", data: city });
+    map.addSource("scan1936", {
+      type: "raster",
+      tiles: ["https://s3.amazonaws.com/holc/tiles/WA/Seattle/1936/{z}/{x}/{y}.png"],
+      tileSize: 256,
+      attribution: '1936 map: <a href="https://dsl.richmond.edu/panorama/redlining/">Mapping Inequality</a>, CC BY-NC-SA 4.0',
+    });
+    map.addLayer({ id: "scan1936", type: "raster", source: "scan1936", layout: { visibility: "none" }, paint: { "raster-opacity": 0.85 } });
+    document.getElementById("scan").addEventListener("change", (e) => {
+      const on = e.target.checked;
+      map.setLayoutProperty("scan1936", "visibility", on ? "visible" : "none");
+      map.setPaintProperty("zones-fill", "fill-opacity", on ? 0.15 : 0.72);
+    });
     map.addLayer({ id: "city-line", type: "line", source: "city", paint: { "line-color": "#7a7265", "line-width": 1, "line-dasharray": [2, 2] } });
     map.addLayer({ id: "zones-fill", type: "fill", source: "zones", paint: { "fill-color": fillFor("grade"), "fill-opacity": 0.72 } });
     map.addLayer({ id: "zones-line", type: "line", source: "zones", paint: { "line-color": "#3b352c", "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.3, 14, 1.2], "line-opacity": 0.6 } });

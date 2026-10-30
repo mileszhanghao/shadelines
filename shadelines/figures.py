@@ -66,7 +66,7 @@ def maps(gpkg: Path, out: Path) -> Path:
     fig.text(
         0.01,
         0.01,
-        "HOLC areas: Mapping Inequality (CC BY-NC-SA 4.0). Canopy: City of Seattle 2021 assessment, by tract, "
+        "HOLC areas: Mapping Inequality (CC BY-NC-SA 4.0). Canopy: City of Seattle 2021 assessment, by block group, "
         "split by area. Dashed line: today's city limits.",
         fontsize=8,
         color=MUTED,

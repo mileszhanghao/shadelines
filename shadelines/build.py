@@ -21,6 +21,7 @@ from shadelines import load
 from shadelines.interpolate import areal_weighted, dasymetric
 
 GRADES = ["A", "B", "C", "D"]
+MIN_CANOPY_COVERAGE = 0.5
 GRADE_NAMES = {"A": "Best", "B": "Still desirable", "C": "Declining", "D": "Hazardous"}
 ACS_COUNTS = ["population", "race_total", "white_alone_not_hispanic", "occupied_units", "owner_occupied_units"]
 ACS_MEANS = ["median_household_income"]
@@ -74,6 +75,11 @@ def build(raw: Path = load.RAW, out_dir: Path = Path("data/processed"), site_dir
 
     zones = holc.merge(measures(holc, "area_id", canopy, acs, blocks), on="area_id", how="left")
     zones["area_km2"] = zones.area / 1e6
+    # Canopy for an area the city's survey mostly doesn't cover would rest on a sliver
+    # of its land; leave it blank rather than guess.
+    zones["canopy_coverage"] = zones["covered_area"] / zones.area
+    thin = zones["canopy_coverage"] < MIN_CANOPY_COVERAGE
+    zones.loc[thin, ["canopy_2016", "canopy_2021", "land"]] = np.nan
     zones = gpd.GeoDataFrame(add_rates(zones), geometry="geometry", crs=holc.crs)
 
     graded = zones[zones["grade"].isin(GRADES)]
@@ -116,6 +122,7 @@ def build(raw: Path = load.RAW, out_dir: Path = Path("data/processed"), site_dir
         "city": row(baseline),
         "ungraded_areas": int((~zones["grade"].isin(GRADES)).sum()),
         "canopy_unit": canopy_level,
+        "canopy_left_blank": sorted(zones.loc[thin, "label"].tolist()),
         "check": {
             # Our citywide canopy should match the city's own published figure closely.
             "city_canopy_pct_2021_from_tracts": round(float(baseline["canopy_pct_2021"]), 2),
