@@ -1,0 +1,8 @@
+{
+ "B01003_E001": "population",
+ "B03002_E001": "race_total",
+ "B03002_E003": "white_alone_not_hispanic",
+ "B19013_E001": "median_household_income",
+ "B25003_E001": "occupied_units",
+ "B25003_E002": "owner_occupied_units"
+}

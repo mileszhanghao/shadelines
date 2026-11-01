@@ -1,0 +1,12 @@
+{
+ "https://s3.amazonaws.com/holc/tiles/WA/Seattle/1936/{z}/{x}/{y}.png": {
+  "status": 200,
+  "type": "image/png",
+  "bytes": 146685
+ },
+ "https://dsl.richmond.edu/panorama/redlining/tiles/WA/Seattle/1936/{z}/{x}/{y}.png": {
+  "status": 200,
+  "type": "text/html; charset=UTF-8",
+  "bytes": 1358
+ }
+}

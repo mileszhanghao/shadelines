@@ -1,0 +1,58 @@
+{
+ "acs_block_groups.csv": {
+  "source": "acs",
+  "url": "https://www2.census.gov/programs-surveys/acs/summary_file/2023/table-based-SF/data/5YRData/acsdt5y2023-b01003.dat https://www2.census.gov/programs-surveys/acs/summary_file/2023/table-based-SF/data/5YRData/acsdt5y2023-b03002.dat https://www2.census.gov/programs-surveys/acs/summary_file/2023/table-based-SF/data/5YRData/acsdt5y2023-b19013.dat https://www2.census.gov/programs-surveys/acs/summary_file/2023/table-based-SF/data/5YRData/acsdt5y2023-b25003.dat",
+  "bytes": 78552,
+  "sha256": "fd2fc5d124d958c611d93c9488fc3e1ed468c686bfece948f0fca3278a925f6c",
+  "fetched_at": "2026-11-01T18:11:19+00:00"
+ },
+ "blocks_2020.gpkg": {
+  "source": "blocks",
+  "url": "https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/tl_2020_53_tabblock20.zip",
+  "bytes": 20238336,
+  "sha256": "48116c1960add2a3f975817595b63d86e6e85d80f8f89b26c5b11f6f22f375d3",
+  "fetched_at": "2026-11-01T18:11:22+00:00"
+ },
+ "canopy_block_groups.geojson": {
+  "source": "canopy",
+  "url": "https://services.arcgis.com/ZOyb2t4B0UYuYNYH/arcgis/rest/services/Tree_Canopy_Block_Groups_2016_2021/FeatureServer/0",
+  "bytes": 1472124,
+  "sha256": "a77e9684b8a67bd3ebf8ccf901d7694491efb8af8aeedb8bbd9cb7f270e9a0c4",
+  "fetched_at": "2026-11-01T18:11:17+00:00"
+ },
+ "canopy_tracts.geojson": {
+  "source": "canopy",
+  "url": "https://services.arcgis.com/ZOyb2t4B0UYuYNYH/arcgis/rest/services/Seattle_Tree_Canopy_2016_2021_RSE_Census_Tracts/FeatureServer/37",
+  "bytes": 2261514,
+  "sha256": "43075103a2602c88fe8b08c7f5f01ab8e47cce5b39f2ff52622bd5841d76fa3e",
+  "fetched_at": "2026-11-01T18:11:17+00:00"
+ },
+ "cb_bg.zip": {
+  "source": "tiger",
+  "url": "https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_53_bg_500k.zip",
+  "bytes": 2275807,
+  "sha256": "a00d7eadb7a222a98cdfa6edca3c94f07eac74d9187212ef5ecb5663b73dffc9",
+  "fetched_at": "2026-11-01T18:11:22+00:00"
+ },
+ "cb_place.zip": {
+  "source": "tiger",
+  "url": "https://www2.census.gov/geo/tiger/GENZ2023/shp/cb_2023_53_place_500k.zip",
+  "bytes": 457446,
+  "sha256": "cc91bec333bbf0b442d1c94b5ed173ce47120bfcdafc74f30fa20a33fdd3c663",
+  "fetched_at": "2026-11-01T18:11:22+00:00"
+ },
+ "holc.gpkg": {
+  "source": "holc",
+  "url": "https://dsl.richmond.edu/panorama/redlining/static/mappinginequality.gpkg",
+  "bytes": 8826880,
+  "sha256": "a035606102e8f21879835e2d318bb4f390efa9e7982cb8d2fc6795598ff854f1",
+  "fetched_at": "2026-11-01T18:11:14+00:00"
+ },
+ "holc_tiles.json": {
+  "source": "holc_tiles",
+  "url": "probe",
+  "bytes": 301,
+  "sha256": "01cf8eae466b51ca1450eccf17e406fefa0f98d791a0174be3fd231da1485823",
+  "fetched_at": "2026-11-01T18:11:22+00:00"
+ }
+}
